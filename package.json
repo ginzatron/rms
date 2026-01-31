@@ -1,0 +1,23 @@
+{
+  "name": "rms",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "db:reset": "rm -f rms.db && bun run src/db/seed.ts",
+    "db:seed": "bun run src/db/seed.ts",
+    "db:shell": "sqlite3 rms.db"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "hono": "^4.11.7"
+  }
+}

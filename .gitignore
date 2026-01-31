@@ -64,6 +64,7 @@ env/
 *.sqlite
 *.sqlite3
 *.db
+rms.db
 
 # Secrets (never commit)
 *.pem
@@ -73,3 +74,4 @@ credentials/
 
 # Claude Code local settings (keep skills/agents, ignore local overrides)
 CLAUDE.local.md
+bun.lockb
