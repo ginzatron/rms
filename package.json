@@ -5,19 +5,26 @@
   "private": true,
   "scripts": {
     "dev": "bun run --watch src/index.ts",
+    "dev:api": "bun run --watch src/index.ts",
+    "dev:frontend": "cd frontend && bun run dev",
     "start": "bun run src/index.ts",
-    "db:reset": "rm -f rms.db && bun run src/db/seed.ts",
-    "db:seed": "bun run src/db/seed.ts",
-    "db:shell": "sqlite3 rms.db"
+    "build:frontend": "cd frontend && bun run build",
+    "db:start": "docker compose up -d",
+    "db:stop": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "db:logs": "docker compose logs -f postgres",
+    "db:shell": "docker exec -it rms-postgres psql -U rms -d rms",
+    "db:migrate": "docker exec -i rms-postgres psql -U rms -d rms < backend/database/001-schema.sql",
+    "db:seed": "docker exec -i rms-postgres psql -U rms -d rms < backend/database/002-seed.sql"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "hono": "^4.11.7"
+    "hono": "^4.11.7",
+    "postgres": "^3.4.5"
   }
 }

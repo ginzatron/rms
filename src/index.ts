@@ -1,16 +1,13 @@
 /**
  * RMS - Residency Management System
  *
- * Backend API server using Hono + Bun
+ * Backend API server using Hono + Bun + PostgreSQL
  */
 
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { Database } from "bun:sqlite";
-
-// Initialize database
-const db = new Database("rms.db");
+import { sql, checkConnection } from "./db/connection";
 
 // Initialize Hono app
 const app = new Hono();
@@ -23,91 +20,74 @@ app.use("*", cors());
 // Health Check
 // ============================================
 
-app.get("/", (c) => {
+app.get("/", async (c) => {
+  const dbOk = await checkConnection();
   return c.json({
     name: "RMS API",
-    version: "0.1.0",
-    status: "ok",
+    version: "0.2.0",
+    status: dbOk ? "ok" : "degraded",
+    database: dbOk ? "connected" : "disconnected",
   });
 });
 
 // ============================================
-// Users API (for user selector auth)
+// Users API
 // ============================================
 
-app.get("/api/users", (c) => {
-  const users = db
-    .query(`
-      SELECT
-        u.id,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.photo_url,
-        GROUP_CONCAT(DISTINCT pm.role) as roles
-      FROM users u
-      LEFT JOIN program_memberships pm ON pm.user_id = u.id AND pm.is_active = 1
-      WHERE u.is_active = 1
-      GROUP BY u.id
-      ORDER BY u.last_name, u.first_name
-    `)
-    .all();
+app.get("/api/users", async (c) => {
+  const users = await sql`
+    SELECT
+      id,
+      first_name,
+      last_name,
+      email,
+      role,
+      photo_url
+    FROM users
+    WHERE is_active = true
+    ORDER BY last_name, first_name
+  `;
 
   return c.json(users);
 });
 
-app.get("/api/users/:id", (c) => {
+app.get("/api/users/:id", async (c) => {
   const id = c.req.param("id");
 
-  const user = db
-    .query(`
-      SELECT
-        u.id,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.photo_url
-      FROM users u
-      WHERE u.id = ? AND u.is_active = 1
-    `)
-    .get(id);
+  const [user] = await sql`
+    SELECT
+      id,
+      first_name,
+      last_name,
+      email,
+      role,
+      photo_url
+    FROM users
+    WHERE id = ${id} AND is_active = true
+  `;
 
   if (!user) {
     return c.json({ error: "User not found" }, 404);
   }
 
-  // Get roles
-  const roles = db
-    .query(`
-      SELECT role, program_id, started_at
-      FROM program_memberships
-      WHERE user_id = ? AND is_active = 1
-    `)
-    .all(id);
-
   // Get resident data if applicable
-  const resident = db
-    .query(`
-      SELECT id, pgy_level, status, medical_school
-      FROM residents
-      WHERE user_id = ?
-    `)
-    .get(id);
+  const [resident] = await sql`
+    SELECT id, pgy_level, status, medical_school
+    FROM residents
+    WHERE user_id = ${id}
+  `;
 
   // Get faculty data if applicable
-  const faculty = db
-    .query(`
-      SELECT id, rank, is_core_faculty
-      FROM faculty
-      WHERE user_id = ? AND is_active = 1
-    `)
-    .get(id);
+  const [faculty] = await sql`
+    SELECT id, rank, is_core_faculty, can_assess
+    FROM faculty
+    WHERE user_id = ${id} AND is_active = true
+  `;
 
   return c.json({
     ...user,
-    roles,
-    resident,
-    faculty,
+    resident: resident || null,
+    faculty: faculty || null,
   });
 });
 
@@ -115,51 +95,90 @@ app.get("/api/users/:id", (c) => {
 // Residents API
 // ============================================
 
-app.get("/api/residents", (c) => {
-  const residents = db
-    .query(`
-      SELECT
-        r.id,
-        r.pgy_level,
-        r.status,
-        r.medical_school,
-        u.id as user_id,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.photo_url
-      FROM residents r
-      JOIN users u ON u.id = r.user_id
-      WHERE r.status = 'active'
-      ORDER BY r.pgy_level DESC, u.last_name
-    `)
-    .all();
+app.get("/api/residents", async (c) => {
+  const residents = await sql`
+    SELECT
+      r.id,
+      r.pgy_level,
+      r.status,
+      r.medical_school,
+      u.id as user_id,
+      u.first_name,
+      u.last_name,
+      u.email,
+      u.photo_url
+    FROM residents r
+    JOIN users u ON u.id = r.user_id
+    WHERE r.status = 'active'
+    ORDER BY r.pgy_level DESC, u.last_name
+  `;
 
   return c.json(residents);
+});
+
+app.get("/api/residents/:id/progress", async (c) => {
+  const id = c.req.param("id");
+
+  // Get EPA progress
+  const progress = await sql`
+    SELECT
+      e.id as epa_id,
+      e.epa_number,
+      e.title,
+      e.short_name,
+      e.category,
+      COUNT(ea.id) as total_assessments,
+      SUM(CASE WHEN ea.entrustment_level = '1' THEN 1 ELSE 0 END)::int as level_1,
+      SUM(CASE WHEN ea.entrustment_level = '2' THEN 1 ELSE 0 END)::int as level_2,
+      SUM(CASE WHEN ea.entrustment_level = '3' THEN 1 ELSE 0 END)::int as level_3,
+      SUM(CASE WHEN ea.entrustment_level = '4' THEN 1 ELSE 0 END)::int as level_4,
+      SUM(CASE WHEN ea.entrustment_level = '5' THEN 1 ELSE 0 END)::int as level_5,
+      MAX(ea.entrustment_level) as highest_level,
+      MAX(ea.assessment_date) as last_assessment
+    FROM epa_definitions e
+    LEFT JOIN epa_assessments ea ON ea.epa_id = e.id
+      AND ea.resident_id = ${id}
+      AND ea.deleted = false
+    WHERE e.is_active = true
+    GROUP BY e.id
+    ORDER BY e.display_order
+  `;
+
+  // Get overall stats
+  const [stats] = await sql`
+    SELECT
+      COUNT(*)::int as total_assessments,
+      COUNT(DISTINCT epa_id)::int as epas_assessed,
+      COUNT(DISTINCT faculty_id)::int as unique_assessors,
+      AVG(entrustment_level::int) as avg_level
+    FROM epa_assessments
+    WHERE resident_id = ${id} AND deleted = false
+  `;
+
+  return c.json({ progress, stats });
 });
 
 // ============================================
 // Faculty API
 // ============================================
 
-app.get("/api/faculty", (c) => {
-  const faculty = db
-    .query(`
-      SELECT
-        f.id,
-        f.rank,
-        f.is_core_faculty,
-        u.id as user_id,
-        u.first_name,
-        u.last_name,
-        u.email,
-        u.photo_url
-      FROM faculty f
-      JOIN users u ON u.id = f.user_id
-      WHERE f.is_active = 1
-      ORDER BY u.last_name
-    `)
-    .all();
+app.get("/api/faculty", async (c) => {
+  const faculty = await sql`
+    SELECT
+      f.id,
+      f.rank,
+      f.is_core_faculty,
+      f.can_assess,
+      u.id as user_id,
+      u.first_name,
+      u.last_name,
+      u.email,
+      u.photo_url
+    FROM faculty f
+    JOIN users u ON u.id = f.user_id
+    WHERE f.is_active = true AND f.can_assess = true
+    ORDER BY u.last_name
+  `;
 
   return c.json(faculty);
 });
@@ -168,15 +187,19 @@ app.get("/api/faculty", (c) => {
 // EPAs API
 // ============================================
 
-app.get("/api/epas", (c) => {
-  const epas = db
-    .query(`
-      SELECT id, name, short_name, category, display_order
-      FROM epas
-      WHERE specialty_code = 'general_surgery'
-      ORDER BY display_order
-    `)
-    .all();
+app.get("/api/epas", async (c) => {
+  const epas = await sql`
+    SELECT
+      id,
+      epa_number,
+      title,
+      short_name,
+      category,
+      display_order
+    FROM epa_definitions
+    WHERE is_active = true
+    ORDER BY display_order
+  `;
 
   return c.json(epas);
 });
@@ -185,36 +208,47 @@ app.get("/api/epas", (c) => {
 // Clinical Sites API
 // ============================================
 
-app.get("/api/clinical-sites", (c) => {
-  const sites = db
-    .query(`
-      SELECT
-        cs.id,
-        cs.name,
-        cs.site_classification,
-        i.name as institution_name
-      FROM clinical_sites cs
-      JOIN institutions i ON i.id = cs.institution_id
-      WHERE cs.is_active = 1
-      ORDER BY cs.site_classification, cs.name
-    `)
-    .all();
+app.get("/api/clinical-sites", async (c) => {
+  const sites = await sql`
+    SELECT
+      id,
+      name,
+      site_type
+    FROM clinical_sites
+    WHERE is_active = true
+    ORDER BY site_type, name
+  `;
 
   return c.json(sites);
+});
+
+// ============================================
+// Rotations API
+// ============================================
+
+app.get("/api/rotations", async (c) => {
+  const rotations = await sql`
+    SELECT id, name
+    FROM rotations
+    WHERE is_active = true
+    ORDER BY name
+  `;
+
+  return c.json(rotations);
 });
 
 // ============================================
 // EPA Assessments API
 // ============================================
 
-// List assessments (with filters)
-app.get("/api/assessments", (c) => {
+app.get("/api/assessments", async (c) => {
   const residentId = c.req.query("resident_id");
-  const assessorId = c.req.query("assessor_id");
+  const facultyId = c.req.query("faculty_id");
   const epaId = c.req.query("epa_id");
   const limit = parseInt(c.req.query("limit") || "50");
 
-  let query = `
+  // Build dynamic query
+  const assessments = await sql`
     SELECT
       ea.id,
       ea.entrustment_level,
@@ -225,82 +259,60 @@ app.get("/api/assessments", (c) => {
       ea.narrative_feedback,
       ea.acknowledged,
       e.id as epa_id,
+      e.epa_number,
       e.short_name as epa_name,
       e.category as epa_category,
       r.id as resident_id,
+      r.pgy_level,
       u_res.first_name as resident_first_name,
       u_res.last_name as resident_last_name,
-      res.pgy_level,
-      f.id as assessor_id,
-      u_fac.first_name as assessor_first_name,
-      u_fac.last_name as assessor_last_name,
+      f.id as faculty_id,
+      u_fac.first_name as faculty_first_name,
+      u_fac.last_name as faculty_last_name,
       cs.name as site_name
     FROM epa_assessments ea
-    JOIN epas e ON e.id = ea.epa_id
+    JOIN epa_definitions e ON e.id = ea.epa_id
     JOIN residents r ON r.id = ea.resident_id
-    JOIN residents res ON res.id = ea.resident_id
     JOIN users u_res ON u_res.id = r.user_id
-    JOIN faculty f ON f.id = ea.assessor_id
+    JOIN faculty f ON f.id = ea.faculty_id
     JOIN users u_fac ON u_fac.id = f.user_id
     LEFT JOIN clinical_sites cs ON cs.id = ea.clinical_site_id
-    WHERE ea.deleted = 0
+    WHERE ea.deleted = false
+      AND (${residentId}::uuid IS NULL OR ea.resident_id = ${residentId}::uuid)
+      AND (${facultyId}::uuid IS NULL OR ea.faculty_id = ${facultyId}::uuid)
+      AND (${epaId}::uuid IS NULL OR ea.epa_id = ${epaId}::uuid)
+    ORDER BY ea.assessment_date DESC
+    LIMIT ${limit}
   `;
-
-  const params: any[] = [];
-
-  if (residentId) {
-    query += ` AND ea.resident_id = ?`;
-    params.push(residentId);
-  }
-
-  if (assessorId) {
-    query += ` AND ea.assessor_id = ?`;
-    params.push(assessorId);
-  }
-
-  if (epaId) {
-    query += ` AND ea.epa_id = ?`;
-    params.push(parseInt(epaId));
-  }
-
-  query += ` ORDER BY ea.assessment_date DESC LIMIT ?`;
-  params.push(limit);
-
-  const assessments = db.query(query).all(...params);
 
   return c.json(assessments);
 });
 
-// Get single assessment
-app.get("/api/assessments/:id", (c) => {
+app.get("/api/assessments/:id", async (c) => {
   const id = c.req.param("id");
 
-  const assessment = db
-    .query(`
-      SELECT
-        ea.*,
-        e.name as epa_name,
-        e.short_name as epa_short_name,
-        e.category as epa_category,
-        u_res.first_name as resident_first_name,
-        u_res.last_name as resident_last_name,
-        res.pgy_level,
-        u_fac.first_name as assessor_first_name,
-        u_fac.last_name as assessor_last_name,
-        cs.name as site_name,
-        i.name as institution_name
-      FROM epa_assessments ea
-      JOIN epas e ON e.id = ea.epa_id
-      JOIN residents r ON r.id = ea.resident_id
-      JOIN residents res ON res.id = ea.resident_id
-      JOIN users u_res ON u_res.id = r.user_id
-      JOIN faculty f ON f.id = ea.assessor_id
-      JOIN users u_fac ON u_fac.id = f.user_id
-      LEFT JOIN clinical_sites cs ON cs.id = ea.clinical_site_id
-      LEFT JOIN institutions i ON i.id = cs.institution_id
-      WHERE ea.id = ? AND ea.deleted = 0
-    `)
-    .get(id);
+  const [assessment] = await sql`
+    SELECT
+      ea.*,
+      e.epa_number,
+      e.title as epa_title,
+      e.short_name as epa_short_name,
+      e.category as epa_category,
+      r.pgy_level,
+      u_res.first_name as resident_first_name,
+      u_res.last_name as resident_last_name,
+      u_fac.first_name as faculty_first_name,
+      u_fac.last_name as faculty_last_name,
+      cs.name as site_name
+    FROM epa_assessments ea
+    JOIN epa_definitions e ON e.id = ea.epa_id
+    JOIN residents r ON r.id = ea.resident_id
+    JOIN users u_res ON u_res.id = r.user_id
+    JOIN faculty f ON f.id = ea.faculty_id
+    JOIN users u_fac ON u_fac.id = f.user_id
+    LEFT JOIN clinical_sites cs ON cs.id = ea.clinical_site_id
+    WHERE ea.id = ${id} AND ea.deleted = false
+  `;
 
   if (!assessment) {
     return c.json({ error: "Assessment not found" }, 404);
@@ -309,116 +321,73 @@ app.get("/api/assessments/:id", (c) => {
   return c.json(assessment);
 });
 
-// Create assessment
 app.post("/api/assessments", async (c) => {
   const body = await c.req.json();
 
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-
-  db.run(
-    `
+  const [result] = await sql`
     INSERT INTO epa_assessments (
-      id, resident_id, assessor_id, epa_id, entrustment_level,
-      assessment_date, submission_date,
-      clinical_site_id, case_urgency, patient_asa_class,
-      procedure_duration_min, location_type, location_details,
-      narrative_feedback, entry_method
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `,
-    [
-      id,
-      body.resident_id,
-      body.assessor_id,
-      body.epa_id,
-      body.entrustment_level,
-      body.assessment_date || now,
-      now,
-      body.clinical_site_id || null,
-      body.case_urgency || null,
-      body.patient_asa_class || null,
-      body.procedure_duration_min || null,
-      body.location_type || null,
-      body.location_details || null,
-      body.narrative_feedback || null,
-      body.entry_method || "web",
-    ]
-  );
+      resident_id,
+      faculty_id,
+      epa_id,
+      entrustment_level,
+      assessment_date,
+      clinical_site_id,
+      rotation_id,
+      case_urgency,
+      patient_asa_class,
+      procedure_duration_min,
+      location_type,
+      location_details,
+      clinical_context,
+      narrative_feedback,
+      entry_method
+    ) VALUES (
+      ${body.resident_id},
+      ${body.faculty_id},
+      ${body.epa_id},
+      ${body.entrustment_level},
+      ${body.assessment_date || new Date().toISOString()},
+      ${body.clinical_site_id || null},
+      ${body.rotation_id || null},
+      ${body.case_urgency || null},
+      ${body.patient_asa_class || null},
+      ${body.procedure_duration_min || null},
+      ${body.location_type || null},
+      ${body.location_details || null},
+      ${body.clinical_context || null},
+      ${body.narrative_feedback || null},
+      ${body.entry_method || 'web'}
+    )
+    RETURNING id
+  `;
 
-  return c.json({ id, message: "Assessment created" }, 201);
-});
-
-// ============================================
-// Resident Progress API
-// ============================================
-
-app.get("/api/residents/:id/progress", (c) => {
-  const id = c.req.param("id");
-
-  // Get all EPAs with assessment counts and levels
-  const progress = db
-    .query(`
-      SELECT
-        e.id as epa_id,
-        e.name,
-        e.short_name,
-        e.category,
-        COUNT(ea.id) as total_assessments,
-        SUM(CASE WHEN ea.entrustment_level = 1 THEN 1 ELSE 0 END) as level_1,
-        SUM(CASE WHEN ea.entrustment_level = 2 THEN 1 ELSE 0 END) as level_2,
-        SUM(CASE WHEN ea.entrustment_level = 3 THEN 1 ELSE 0 END) as level_3,
-        SUM(CASE WHEN ea.entrustment_level = 4 THEN 1 ELSE 0 END) as level_4,
-        SUM(CASE WHEN ea.entrustment_level = 5 THEN 1 ELSE 0 END) as level_5,
-        MAX(ea.entrustment_level) as highest_level,
-        MAX(ea.assessment_date) as last_assessment
-      FROM epas e
-      LEFT JOIN epa_assessments ea ON ea.epa_id = e.id
-        AND ea.resident_id = ?
-        AND ea.deleted = 0
-      WHERE e.specialty_code = 'general_surgery'
-      GROUP BY e.id
-      ORDER BY e.display_order
-    `)
-    .all(id);
-
-  // Get overall stats
-  const stats = db
-    .query(`
-      SELECT
-        COUNT(*) as total_assessments,
-        COUNT(DISTINCT epa_id) as epas_assessed,
-        COUNT(DISTINCT assessor_id) as unique_assessors,
-        AVG(entrustment_level) as avg_level
-      FROM epa_assessments
-      WHERE resident_id = ? AND deleted = 0
-    `)
-    .get(id);
-
-  return c.json({ progress, stats });
+  return c.json({ id: result.id, message: "Assessment created" }, 201);
 });
 
 // ============================================
 // Start Server
 // ============================================
 
-const port = process.env.PORT || 3000;
+const port = parseInt(process.env.PORT || "3000");
 
 console.log(`
 ╔═══════════════════════════════════════════════╗
 ║     RMS - Residency Management System         ║
-║     API Server                                ║
+║     API Server (PostgreSQL)                   ║
 ╠═══════════════════════════════════════════════╣
 ║  Server running at http://localhost:${port}      ║
 ║                                               ║
 ║  Endpoints:                                   ║
+║    GET  /                     - Health check  ║
 ║    GET  /api/users                            ║
 ║    GET  /api/residents                        ║
+║    GET  /api/residents/:id/progress           ║
 ║    GET  /api/faculty                          ║
 ║    GET  /api/epas                             ║
 ║    GET  /api/clinical-sites                   ║
+║    GET  /api/rotations                        ║
 ║    GET  /api/assessments                      ║
 ║    POST /api/assessments                      ║
-║    GET  /api/residents/:id/progress           ║
 ╚═══════════════════════════════════════════════╝
 `);
 

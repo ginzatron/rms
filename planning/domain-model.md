@@ -27,41 +27,29 @@ Each section follows this pattern:
 │                                       │ accredits                               │
 │                                       ▼                                         │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │                        SPONSORING INSTITUTION                            │   │
+│  │                            INSTITUTION                                   │   │
+│  │                    (Physical entity - hospital)                          │   │
 │  │                                                                          │   │
-│  │   Has: DIO, GMEC, Institutional Policies                                │   │
-│  │   Owns: Programs                                                         │   │
-│  │   Governs: Participating Sites via PLAs                                 │   │
-│  │                                                                          │   │
-│  │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                  │   │
-│  │   │   Program    │  │   Program    │  │   Program    │                  │   │
-│  │   │  (Surgery)   │  │    (IM)      │  │  (Peds)      │                  │   │
-│  │   └──────┬───────┘  └──────────────┘  └──────────────┘                  │   │
-│  │          │                                                               │   │
-│  │          │ contains                                                      │   │
-│  │          ▼                                                               │   │
-│  │   ┌─────────────────────────────────────────────────────┐               │   │
-│  │   │                    PEOPLE                            │               │   │
-│  │   │                                                      │               │   │
-│  │   │   Program Director ◄── oversees ──► Residents       │               │   │
-│  │   │          │                              │            │               │   │
-│  │   │          │                              │            │               │   │
-│  │   │   Core Faculty ◄──── assess ──────────►│            │               │   │
-│  │   │                                         │            │               │   │
-│  │   │   Coordinators ◄── support ────────────►            │               │   │
-│  │   └─────────────────────────────────────────────────────┘               │   │
+│  │   ┌────────────────────────┐    ┌────────────────────────┐              │   │
+│  │   │    SPONSORING ROLE     │    │   PARTICIPATING ROLE   │              │   │
+│  │   │                        │    │                        │              │   │
+│  │   │  DIO, GMEC, Policies   │◄──►│   (via PLAs)           │              │   │
+│  │   │  Accreditation status  │PLA │   Clinical Sites       │              │   │
+│  │   │                        │    │   Local Supervisors    │              │   │
+│  │   │  ┌─────────────────┐   │    │                        │              │   │
+│  │   │  │    Programs     │   │    └────────────────────────┘              │   │
+│  │   │  │  ┌───────────┐  │   │                                            │   │
+│  │   │  │  │ Residents │  │   │    Note: Same institution can have         │   │
+│  │   │  │  │ Faculty   │  │   │    BOTH roles (MGH sponsors its own        │   │
+│  │   │  │  │ EPAs      │  │   │    programs AND participates in HMS)       │   │
+│  │   │  │  └───────────┘  │   │                                            │   │
+│  │   │  └─────────────────┘   │                                            │   │
+│  │   └────────────────────────┘                                            │   │
 │  │                                                                          │   │
 │  └──────────────────────────────────────────────────────────────────────────┘   │
-│                                       │                                         │
-│                                       │ PLAs govern                             │
-│                                       ▼                                         │
-│  ┌──────────────────────────────────────────────────────────────────────────┐  │
-│  │                       PARTICIPATING SITES                                 │  │
-│  │                                                                           │  │
-│  │   VA Hospital    Community Hospital    Affiliate Academic Center         │  │
-│  │                                                                           │  │
-│  │   Each has: Clinical Sites, Local Supervisors, Site Agreements           │  │
-│  └──────────────────────────────────────────────────────────────────────────┘  │
+│                                                                                 │
+│  KEY INSIGHT: Institutions play ROLES. The same institution can be both        │
+│  a sponsor (running programs) and a participant (in other programs).           │
 │                                                                                 │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -151,38 +139,59 @@ institutions
 
 # LAYER 2: Institutional Roles & Governance
 
-## 2.1 Sponsoring Institution
+## 2.1 Institution Roles (Hybrid Model)
 
 ### The Concept
-When an institution decides to run residency programs, it becomes a **Sponsoring Institution**. This is a *role* the institution takes on, with specific ACGME requirements:
+When an institution decides to run residency programs, it takes on a **Sponsoring Role**. When it hosts residents from other programs, it takes on a **Participating Role**. These are separate *roles* the same institution can play.
 
-- Must have a **DIO** (Designated Institutional Official) - the person accountable to ACGME
-- Must have a **GMEC** (Graduate Medical Education Committee) - governance body
-- Must maintain **institutional accreditation** - separate from program accreditation
-- Must have **institutional policies** - duty hours, supervision, etc.
+**Key insight**: MGH can be BOTH:
+- A sponsor (runs MGH General Surgery)
+- A participant (in Harvard Medical School programs)
 
-This is why it's a separate table - not all institutions sponsor, and the sponsoring role has its own attributes.
+This is why we model roles separately from institutions.
+
+### Design Decision: Why Roles?
+
+We considered several approaches (see ADR 007):
+- Single table with type column - rejected (can't be "both")
+- Boolean flags - rejected (leads to null columns)
+- Separate institution tables - rejected (duplicates base data)
+
+**Solution**: Hybrid role-based model with extension tables for role-specific data.
 
 ### Current Model
+
+**Institution Roles** (what roles does this institution play?):
 ```sql
-sponsoring_institutions
-├── id                         -- UUID
-├── institution_id             -- Which institution plays this role
-├── dio_name                   -- "Dr. Robert Williams"
+institution_roles
+├── id                -- UUID
+├── institution_id    -- Which institution plays this role
+├── role              -- 'sponsoring' or 'participating'
+├── is_active         -- Currently active?
+├── effective_date    -- When they started this role
+├── ended_date        -- NULL if current
+└── UNIQUE(institution_id, role, effective_date)
+```
+
+**Sponsoring Details** (1:1 extension for sponsoring roles):
+```sql
+sponsoring_details
+├── institution_role_id   -- FK to institution_roles (PK)
+├── acgme_sponsor_id      -- ACGME's sponsor identifier
+├── dio_user_id           -- FK to users
+├── dio_name              -- Fallback if user not in system
 ├── dio_email
-├── acgme_accreditation_status -- 'accredited', 'probation', 'initial'
-├── next_site_visit            -- When ACGME will visit
-├── is_active
-├── effective_date             -- When they became a sponsor
-└── created_at
+├── acgme_status          -- 'accredited', 'probation', 'initial', etc.
+├── next_site_visit       -- When ACGME will visit
+└── last_site_visit
 ```
 
 ### Relationships
-- **Is a role of →** Institution (1:1)
-- **Has a →** DIO (who is a User)
-- **Has a →** GMEC (committee of people)
-- **Owns →** Programs (1:many)
-- **Governs →** Participating Sites (via PLAs)
+- **Institution can have →** Multiple roles (1:N)
+- **Sponsoring role has →** Sponsoring details (1:1)
+- **Sponsoring role owns →** Programs (1:many)
+- **Sponsoring role links to →** Participating roles (via PLAs)
+- **Participating role links to →** Sponsoring roles (via PLAs)
 
 ### What's Missing
 | Gap | Why It Matters |
@@ -252,22 +261,27 @@ The PLA defines:
 ```sql
 participation_agreements
 ├── id
-├── sponsoring_institution_id  -- Who sponsors
-├── participating_institution_id -- Who participates
-├── agreement_type             -- 'PLA', 'affiliation_agreement', 'MOU'
+├── sponsor_role_id       -- FK to institution_roles (where role='sponsoring')
+├── participant_role_id   -- FK to institution_roles (where role='participating')
+├── agreement_type        -- 'PLA', 'affiliation', 'MOU'
 ├── effective_date
 ├── expiration_date
-├── status                     -- 'active', 'expired', 'pending'
-├── applies_to_all_programs    -- Or specific programs only
-├── covered_program_ids        -- JSON array if not all
-├── document_url               -- Link to signed agreement
-└── created_at
+├── status                -- 'active', 'expired', 'pending', 'terminated'
+├── applies_to_all_programs  -- Or specific programs only
+├── covered_program_ids   -- JSON array if not all
+├── document_url          -- Link to signed agreement
+├── notes
+└── UNIQUE(sponsor_role_id, participant_role_id, effective_date)
 ```
 
 ### Relationships
-- **Links →** Sponsoring Institution to Participating Institution
+- **Links →** Sponsor Role to Participant Role (via institution_roles)
 - **Covers →** Programs (all or specific)
 - **Enables →** Clinical Sites at that institution
+
+**Note**: PLAs now link *roles* not institutions directly. This allows:
+- Same institution to have multiple PLAs with different sponsors (if participating in multiple programs)
+- Clean separation between the institutional relationship and the agreement terms
 
 ### What's Missing
 | Gap | Why It Matters |
@@ -353,17 +367,17 @@ A **Program** is a specific residency or fellowship. It's the educational entity
 ```sql
 programs
 ├── id
-├── sponsoring_institution_id  -- Who sponsors this program
-├── specialty_code             -- References ref_specialties
-├── name                       -- "MGH General Surgery Residency"
-├── acgme_program_id           -- ACGME's program identifier
-├── program_director_id        -- References users
-├── settings                   -- JSON for program config
+├── sponsor_role_id      -- FK to institution_roles (where role='sponsoring')
+├── specialty_code       -- References ref_specialties
+├── name                 -- "MGH General Surgery Residency"
+├── acgme_program_id     -- ACGME's program identifier
+├── program_director_id  -- References users
+├── settings             -- JSON for program config
 └── created_at
 ```
 
 ### Relationships
-- **Sponsored by →** Sponsoring Institution (many:1)
+- **Sponsored by →** Institution Role (many:1) - specifically, a sponsoring role
 - **In specialty →** Reference Specialty (many:1)
 - **Led by →** Program Director (who is a User/Faculty)
 - **Contains →** Residents (1:many)

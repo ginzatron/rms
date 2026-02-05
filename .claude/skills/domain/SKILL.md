@@ -88,26 +88,49 @@ EPAs are specific clinical activities that trainees must demonstrate competency 
 
 ## Institutional Structure
 
-### Sponsoring Institution
+### Institution vs Institution Role
 
+**Key concept**: An institution is a physical entity (hospital, medical school). The institution *plays roles* in the GME system.
+
+```
+Institution (physical entity)
+└── Roles it plays:
+    ├── Sponsoring Role (if it runs programs)
+    │   └── Has: DIO, GMEC, ACGME accreditation, site visits
+    └── Participating Role (if it hosts residents from other programs)
+        └── Has: PLAs with sponsoring institutions
+```
+
+### Sponsoring Role
+
+When an institution is a sponsor:
 - Holds ACGME institutional accreditation
 - Has a DIO (Designated Institutional Official)
 - Has a GMEC (Graduate Medical Education Committee)
-- Can be the primary training site AND participate in other institutions' programs
+- Runs residency/fellowship programs
+- Undergoes ACGME site visits
 
-### Participating Sites
+### Participating Role
 
-- Where residents train outside the sponsoring institution
-- Requires PLA (Program Letter Agreement) with sponsoring institution
+When an institution is a participant:
+- Provides clinical training sites for another institution's programs
+- Requires PLA (Program Letter Agreement) with the sponsoring institution
 - Examples: VA hospitals, community hospitals, affiliate academic centers
 
-### Key Distinction
+### Why This Distinction Matters
 
-An institution can be BOTH:
-- A sponsoring institution for its own programs
-- A participating site for another institution's programs
+An institution can be **BOTH** a sponsor AND a participant:
 
-Example: MGH sponsors its own surgery residency AND is a participating site for Harvard Medical School's programs.
+| Institution | Sponsoring Role | Participating Role |
+|-------------|-----------------|-------------------|
+| MGH | Sponsors MGH General Surgery | Participates in HMS programs |
+| VA Boston | None | Participates in MGH programs |
+| BWH | Sponsors BWH Internal Medicine | Participates in MGH programs |
+
+This is why we model "roles" separately from "institutions" - the same hospital can simultaneously:
+1. Run its own programs (sponsoring role)
+2. Be an affiliate for other programs (participating role)
+3. Have multiple PLAs with different sponsors
 
 ## Clinical Competency Committee (CCC)
 
