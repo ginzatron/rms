@@ -11,6 +11,12 @@ An EPA (Entrustable Professional Activities) assessment platform for Graduate Me
 3. Add schema complexity only when a real use case requires it
 4. Defer multi-tenant, institutional hierarchy until needed
 
+**Platform Strategy**: Mobile captures, web aggregates.
+
+- **Mobile**: Quick, isolated interactions—faculty logs an assessment in 30 seconds between cases
+- **Web**: Dashboards, reports, and aggregated views for oversight roles (PDs, coordinators, CCC)
+- New features should ask: "Is this a capture moment (mobile) or a review/analysis moment (web)?"
+
 ## Project Context
 
 - **Domain**: Graduate Medical Education (ACGME-compliant)
@@ -49,6 +55,11 @@ bun run db:logs      # View PostgreSQL logs
 # Server
 bun run dev          # Start with hot reload
 bun run start        # Production mode
+
+# Testing
+bun test             # Run all tests
+bun test tests/api   # Run API tests only
+bun test --watch     # Run tests in watch mode
 ```
 
 ## Database
@@ -100,6 +111,23 @@ programs
 | GET | `/api/assessments` | Assessments (filterable) |
 | GET | `/api/assessments/:id` | Single assessment |
 | POST | `/api/assessments` | Create assessment |
+| PATCH | `/api/assessments/:id/acknowledge` | Mark assessment as reviewed |
+| GET | `/api/residents/:id/unacknowledged` | Unreviewed assessments for resident |
+
+## Testing
+
+API tests live in `tests/api/` and use Bun's built-in test runner.
+
+```bash
+bun test             # Run all tests
+bun test tests/api   # Run API tests only
+bun test --watch     # Watch mode
+```
+
+**When adding or modifying API endpoints**, update the corresponding test file:
+- Tests are in `tests/api/{resource}.test.ts`
+- Use `fetchApi()` from `tests/utils/test-client.ts`
+- Run `/api` skill for full guidelines
 
 ## Domain Concepts
 
