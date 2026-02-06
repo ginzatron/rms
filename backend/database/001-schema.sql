@@ -66,6 +66,12 @@ CREATE TYPE epa_category AS ENUM (
     'professional'
 );
 
+CREATE TYPE case_complexity AS ENUM (
+    'straightforward',  -- Easiest 1/3 of similar cases in assessor's practice
+    'moderate',         -- Middle 1/3
+    'complex'           -- Hardest 1/3
+);
+
 -- ============================================================================
 -- PROGRAMS (simplified for MVP - single institution assumed)
 -- ============================================================================
@@ -263,12 +269,14 @@ CREATE TABLE epa_assessments (
 
     -- The assessment
     entrustment_level entrustment_level NOT NULL,
-    assessment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    observation_date DATE NOT NULL DEFAULT CURRENT_DATE,  -- When the clinical observation occurred
+    assessment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),   -- When the assessment was submitted (for staleness tracking)
 
     -- Context (all optional but valuable)
     clinical_site_id UUID REFERENCES clinical_sites(id) ON DELETE SET NULL,
     rotation_id UUID REFERENCES rotations(id) ON DELETE SET NULL,
     case_urgency case_urgency,
+    case_complexity case_complexity,  -- Relative to assessor's typical cases
     patient_asa_class INTEGER CHECK (patient_asa_class IS NULL OR (patient_asa_class >= 1 AND patient_asa_class <= 6)),
     procedure_duration_min INTEGER,
     location_type location_type,
