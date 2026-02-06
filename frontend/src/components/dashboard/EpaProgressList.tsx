@@ -1,8 +1,29 @@
-import { useState } from 'react';
-import type { EpaProgress } from '../../types/api';
+import { useState, useMemo } from 'react';
+import type { EpaProgress, EpaCategory } from '../../types/api';
 import { Skeleton, SkeletonCard, EmptyState } from '../ui';
 import { EpaProgressCard } from './EpaProgressCard';
 import { EpaDetailSheet } from './EpaDetailSheet';
+
+// Ordered categories matching the EPA selector pills
+const CATEGORY_ORDER: { key: EpaCategory; label: string }[] = [
+  { key: 'intraoperative', label: 'Intraoperative' },
+  { key: 'preoperative', label: 'Preoperative' },
+  { key: 'postoperative', label: 'Postoperative' },
+  { key: 'longitudinal', label: 'Longitudinal' },
+  { key: 'professional', label: 'Professional' },
+];
+
+function CategoryDivider({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3 py-1">
+      <div className="flex-1 h-px bg-gray-200" />
+      <span className="text-xs font-medium text-gray-400 uppercase tracking-wider whitespace-nowrap">
+        {label}
+      </span>
+      <div className="flex-1 h-px bg-gray-200" />
+    </div>
+  );
+}
 
 interface EpaProgressListProps {
   progress: EpaProgress[];
@@ -20,6 +41,25 @@ interface EpaProgressListProps {
  */
 export function EpaProgressList({ progress, loading, residentId }: EpaProgressListProps) {
   const [selectedEpa, setSelectedEpa] = useState<EpaProgress | null>(null);
+
+  // Group progress items by category
+  const groupedProgress = useMemo(() => {
+    const groups: Record<EpaCategory, EpaProgress[]> = {
+      intraoperative: [],
+      preoperative: [],
+      postoperative: [],
+      longitudinal: [],
+      professional: [],
+    };
+
+    progress.forEach((epa) => {
+      if (groups[epa.category]) {
+        groups[epa.category].push(epa);
+      }
+    });
+
+    return groups;
+  }, [progress]);
 
   if (loading) {
     return (
@@ -80,13 +120,22 @@ export function EpaProgressList({ progress, loading, residentId }: EpaProgressLi
   return (
     <>
       <div className="p-4 space-y-3">
-        {progress.map((epa) => (
-          <EpaProgressCard
-            key={epa.epa_id}
-            epa={epa}
-            onTap={setSelectedEpa}
-          />
-        ))}
+        {CATEGORY_ORDER.map((category) => {
+          const epasInCategory = groupedProgress[category.key];
+          if (epasInCategory.length === 0) return null;
+          return (
+            <div key={category.key} className="space-y-3">
+              <CategoryDivider label={category.label} />
+              {epasInCategory.map((epa) => (
+                <EpaProgressCard
+                  key={epa.epa_id}
+                  epa={epa}
+                  onTap={setSelectedEpa}
+                />
+              ))}
+            </div>
+          );
+        })}
       </div>
 
       {/* EPA detail drill-down */}
