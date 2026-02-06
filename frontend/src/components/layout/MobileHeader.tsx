@@ -58,7 +58,7 @@ export function MobileHeader() {
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-      <div className="px-4 py-3 flex items-center justify-between">
+      <div className="px-4 py-3 flex items-center justify-between max-w-lg mx-auto">
         {/* Title with context */}
         <div>
           <h1 className="text-lg font-semibold text-gray-900">

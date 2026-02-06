@@ -23,7 +23,7 @@ export function FacultyDashboard({ facultyId }: FacultyDashboardProps) {
     <div className="flex flex-col flex-1">
       {/* Tab bar */}
       <div className="border-b border-gray-200 bg-white">
-        <nav className="flex px-4" aria-label="Faculty tabs">
+        <nav className="flex px-4 max-w-lg mx-auto" aria-label="Faculty tabs">
           <button
             type="button"
             onClick={() => setActiveTab("new")}

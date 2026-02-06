@@ -1,11 +1,11 @@
-import { useState } from 'react';
-import type { FacultyAssessment, EntrustmentLevel } from '../../types/api';
-import { ENTRUSTMENT_DESCRIPTIONS } from '../../types/api';
-import { useFacultyAssessments } from '../../hooks/useFacultyAssessments';
-import { Card, Skeleton, SkeletonCard, EmptyState, StatCard } from '../ui';
-import { levelDotColor } from '../ui/entrustment';
-import { FacultyAssessmentCard } from './FacultyAssessmentCard';
-import { AssessmentDetailSheet } from '../dashboard/AssessmentDetailSheet';
+import { useState } from "react";
+import type { FacultyAssessment, EntrustmentLevel } from "../../types/api";
+import { ENTRUSTMENT_DESCRIPTIONS } from "../../types/api";
+import { useFacultyAssessments } from "../../hooks/useFacultyAssessments";
+import { Card, Skeleton, SkeletonCard, EmptyState, StatCard } from "../ui";
+import { levelDotColor } from "../ui/entrustment";
+import { FacultyAssessmentCard } from "./FacultyAssessmentCard";
+import { AssessmentDetailSheet } from "../dashboard/AssessmentDetailSheet";
 
 interface FacultyHistoryListProps {
   facultyId: string;
@@ -26,7 +26,7 @@ export function FacultyHistoryList({ facultyId }: FacultyHistoryListProps) {
 
   if (loading) {
     return (
-      <div className="p-4 space-y-4">
+      <div className="p-4 space-y-4 max-w-lg mx-auto w-full">
         {/* Stats skeleton */}
         <Card>
           <div className="grid grid-cols-3 gap-3">
@@ -56,7 +56,7 @@ export function FacultyHistoryList({ facultyId }: FacultyHistoryListProps) {
 
   if (!assessments || assessments.length === 0) {
     return (
-      <div className="p-4">
+      <div className="p-4 max-w-lg mx-auto w-full">
         <EmptyState
           icon={
             <svg
@@ -85,14 +85,21 @@ export function FacultyHistoryList({ facultyId }: FacultyHistoryListProps) {
   const uniqueResidents = new Set(assessments.map((a) => a.resident_id)).size;
 
   // Level distribution
-  const levelCounts: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 };
+  const levelCounts: Record<string, number> = {
+    "1": 0,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "5": 0,
+  };
   for (const a of assessments) {
-    levelCounts[a.entrustment_level] = (levelCounts[a.entrustment_level] || 0) + 1;
+    levelCounts[a.entrustment_level] =
+      (levelCounts[a.entrustment_level] || 0) + 1;
   }
 
   return (
     <>
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 max-w-lg mx-auto w-full">
         {/* Summary stats */}
         <Card>
           <div className="grid grid-cols-3 gap-3 mb-3">
@@ -116,9 +123,10 @@ export function FacultyHistoryList({ facultyId }: FacultyHistoryListProps) {
             </span>
             <div className="flex-1 flex items-center gap-1">
               {([1, 2, 3, 4, 5] as const).map((level) => {
-                const count = levelCounts[String(level) as EntrustmentLevel] || 0;
+                const count =
+                  levelCounts[String(level) as EntrustmentLevel] || 0;
                 const label =
-                  ENTRUSTMENT_DESCRIPTIONS[level - 1]?.shortName ?? '';
+                  ENTRUSTMENT_DESCRIPTIONS[level - 1]?.shortName ?? "";
                 return (
                   <div
                     key={level}
@@ -127,9 +135,16 @@ export function FacultyHistoryList({ facultyId }: FacultyHistoryListProps) {
                   >
                     <div className="flex items-end gap-px h-4 w-full justify-center">
                       <div
-                        className={`w-full max-w-6 rounded-sm ${levelDotColor(level)}`}
+                        className={`w-full max-w-6 rounded-sm ${levelDotColor(
+                          level
+                        )}`}
                         style={{
-                          height: `${Math.max((count / Math.max(...Object.values(levelCounts), 1)) * 16, count > 0 ? 2 : 0)}px`,
+                          height: `${Math.max(
+                            (count /
+                              Math.max(...Object.values(levelCounts), 1)) *
+                              16,
+                            count > 0 ? 2 : 0
+                          )}px`,
                         }}
                       />
                     </div>

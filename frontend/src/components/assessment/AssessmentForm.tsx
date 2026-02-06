@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react'
-import { useUser } from '../../context/UserContext'
-import { useClinicalSites } from '../../hooks/useClinicalSites'
-import { postApi } from '../../hooks/useApi'
-import { ResidentSelector } from './ResidentSelector'
-import { EpaSelector } from './EpaSelector'
-import { EntrustmentPicker } from './EntrustmentPicker'
-import { Toast, VoiceInput, FormField, Select, Button } from '../ui'
+import { useState, useCallback } from "react";
+import { useUser } from "../../context/UserContext";
+import { useClinicalSites } from "../../hooks/useClinicalSites";
+import { postApi } from "../../hooks/useApi";
+import { ResidentSelector } from "./ResidentSelector";
+import { EpaSelector } from "./EpaSelector";
+import { EntrustmentPicker } from "./EntrustmentPicker";
+import { Toast, VoiceInput, FormField, Select, Button } from "../ui";
 import type {
   Resident,
   EpaDefinition,
@@ -15,100 +15,106 @@ import type {
   CaseComplexity,
   LocationType,
   EntryMethod,
-} from '../../types/api'
-import { CASE_COMPLEXITY_DESCRIPTIONS } from '../../types/api'
+} from "../../types/api";
+import { CASE_COMPLEXITY_DESCRIPTIONS } from "../../types/api";
 
 // Get today's date in YYYY-MM-DD format for date input
 function getTodayString(): string {
-  return new Date().toISOString().split('T')[0]
+  return new Date().toISOString().split("T")[0];
 }
 
 // Detect entry method based on user agent
 function detectEntryMethod(): EntryMethod {
-  const userAgent = navigator.userAgent.toLowerCase()
+  const userAgent = navigator.userAgent.toLowerCase();
   if (/iphone|ipad|ipod/.test(userAgent)) {
-    return 'mobile_ios'
+    return "mobile_ios";
   }
   if (/android/.test(userAgent)) {
-    return 'mobile_android'
+    return "mobile_android";
   }
-  return 'web'
+  return "web";
 }
 
 interface ToastState {
-  isVisible: boolean
-  message: string
-  type: 'success' | 'error'
+  isVisible: boolean;
+  message: string;
+  type: "success" | "error";
 }
 
 const CASE_URGENCY_OPTIONS = [
-  { value: 'elective', label: 'Elective' },
-  { value: 'urgent', label: 'Urgent' },
-  { value: 'emergent', label: 'Emergent' },
-]
+  { value: "elective", label: "Elective" },
+  { value: "urgent", label: "Urgent" },
+  { value: "emergent", label: "Emergent" },
+];
 
 const LOCATION_TYPE_OPTIONS = [
-  { value: 'or', label: 'Operating Room' },
-  { value: 'clinic', label: 'Clinic' },
-  { value: 'icu', label: 'ICU' },
-  { value: 'ed', label: 'Emergency Dept' },
-  { value: 'ward', label: 'Ward' },
-  { value: 'other', label: 'Other' },
-]
+  { value: "or", label: "Operating Room" },
+  { value: "clinic", label: "Clinic" },
+  { value: "icu", label: "ICU" },
+  { value: "ed", label: "Emergency Dept" },
+  { value: "ward", label: "Ward" },
+  { value: "other", label: "Other" },
+];
 
 export function AssessmentForm() {
   // Core form state
-  const [selectedResident, setSelectedResident] = useState<Resident | null>(null)
-  const [selectedEpa, setSelectedEpa] = useState<EpaDefinition | null>(null)
-  const [entrustmentLevel, setEntrustmentLevel] = useState<number | null>(null)
-  const [narrativeFeedback, setNarrativeFeedback] = useState('')
+  const [selectedResident, setSelectedResident] = useState<Resident | null>(
+    null
+  );
+  const [selectedEpa, setSelectedEpa] = useState<EpaDefinition | null>(null);
+  const [entrustmentLevel, setEntrustmentLevel] = useState<number | null>(null);
+  const [narrativeFeedback, setNarrativeFeedback] = useState("");
 
   // Optional expanded section
-  const [optionalExpanded, setOptionalExpanded] = useState(false)
-  const [clinicalSiteId, setClinicalSiteId] = useState<string>('')
-  const [caseComplexity, setCaseComplexity] = useState<CaseComplexity | ''>('')
-  const [caseUrgency, setCaseUrgency] = useState<CaseUrgency | ''>('')
-  const [locationType, setLocationType] = useState<LocationType | ''>('')
+  const [optionalExpanded, setOptionalExpanded] = useState(false);
+  const [clinicalSiteId, setClinicalSiteId] = useState<string>("");
+  const [caseComplexity, setCaseComplexity] = useState<CaseComplexity | "">("");
+  const [caseUrgency, setCaseUrgency] = useState<CaseUrgency | "">("");
+  const [locationType, setLocationType] = useState<LocationType | "">("");
 
   // Submission state
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [toast, setToast] = useState<ToastState>({
     isVisible: false,
-    message: '',
-    type: 'success',
-  })
+    message: "",
+    type: "success",
+  });
 
   // Context and data hooks
-  const { user } = useUser()
-  const { data: clinicalSites } = useClinicalSites()
+  const { user } = useUser();
+  const { data: clinicalSites } = useClinicalSites();
 
   // Form validation
-  const isFormValid = selectedResident && selectedEpa && entrustmentLevel && user?.facultyId
+  const isFormValid =
+    selectedResident && selectedEpa && entrustmentLevel && user?.facultyId;
 
   const resetForm = useCallback(() => {
-    setSelectedResident(null)
-    setSelectedEpa(null)
-    setEntrustmentLevel(null)
-    setNarrativeFeedback('')
-    setOptionalExpanded(false)
-    setClinicalSiteId('')
-    setCaseComplexity('')
-    setCaseUrgency('')
-    setLocationType('')
-  }, [])
+    setSelectedResident(null);
+    setSelectedEpa(null);
+    setEntrustmentLevel(null);
+    setNarrativeFeedback("");
+    setOptionalExpanded(false);
+    setClinicalSiteId("");
+    setCaseComplexity("");
+    setCaseUrgency("");
+    setLocationType("");
+  }, []);
 
-  const showToast = useCallback((message: string, type: 'success' | 'error') => {
-    setToast({ isVisible: true, message, type })
-  }, [])
+  const showToast = useCallback(
+    (message: string, type: "success" | "error") => {
+      setToast({ isVisible: true, message, type });
+    },
+    []
+  );
 
   const hideToast = useCallback(() => {
-    setToast((prev) => ({ ...prev, isVisible: false }))
-  }, [])
+    setToast((prev) => ({ ...prev, isVisible: false }));
+  }, []);
 
   const handleSubmit = async () => {
-    if (!isFormValid) return
+    if (!isFormValid) return;
 
-    setIsSubmitting(true)
+    setIsSubmitting(true);
 
     try {
       const payload: AssessmentPayload = {
@@ -118,37 +124,38 @@ export function AssessmentForm() {
         entrustment_level: String(entrustmentLevel) as EntrustmentLevel,
         observation_date: getTodayString(),
         entry_method: detectEntryMethod(),
-      }
+      };
 
       // Add optional fields if provided
       if (narrativeFeedback.trim()) {
-        payload.narrative_feedback = narrativeFeedback.trim()
+        payload.narrative_feedback = narrativeFeedback.trim();
       }
       if (clinicalSiteId) {
-        payload.clinical_site_id = clinicalSiteId
+        payload.clinical_site_id = clinicalSiteId;
       }
       if (caseComplexity) {
-        payload.case_complexity = caseComplexity
+        payload.case_complexity = caseComplexity;
       }
       if (caseUrgency) {
-        payload.case_urgency = caseUrgency
+        payload.case_urgency = caseUrgency;
       }
       if (locationType) {
-        payload.location_type = locationType
+        payload.location_type = locationType;
       }
 
-      await postApi<AssessmentPayload, unknown>('/api/assessments', payload)
+      await postApi<AssessmentPayload, unknown>("/api/assessments", payload);
 
-      showToast('Assessment submitted successfully', 'success')
-      resetForm()
+      showToast("Assessment submitted successfully", "success");
+      resetForm();
     } catch (error) {
-      console.error('Failed to submit assessment:', error)
-      const message = error instanceof Error ? error.message : 'Failed to submit assessment'
-      showToast(message, 'error')
+      console.error("Failed to submit assessment:", error);
+      const message =
+        error instanceof Error ? error.message : "Failed to submit assessment";
+      showToast(message, "error");
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   // Show a prompt if no faculty is selected
   if (!user?.facultyId) {
@@ -175,32 +182,33 @@ export function AssessmentForm() {
             Select a Faculty Member
           </h2>
           <p className="text-sm text-gray-500">
-            Use the dropdown in the header to select yourself before logging an assessment.
+            Use the dropdown in the header to select yourself before logging an
+            assessment.
           </p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
     <>
       <form
         onSubmit={(e) => {
-          e.preventDefault()
-          handleSubmit()
+          e.preventDefault();
+          handleSubmit();
         }}
         className="flex flex-col min-h-full"
       >
         {/* Scrollable form content */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-6">
+        <div className="flex-1 overflow-y-auto px-4 py-4 pb-24 space-y-6 max-w-lg mx-auto w-full">
           {/* Date indicator */}
           <div className="flex items-center justify-between text-sm text-gray-500">
             <span>New Assessment</span>
             <span className="font-medium">
-              {new Date().toLocaleDateString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
+              {new Date().toLocaleDateString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
               })}
             </span>
           </div>
@@ -219,19 +227,28 @@ export function AssessmentForm() {
           </FormField>
 
           {/* Case complexity - prominent per SIMPL research */}
-          <FormField label="Case Complexity" hint="recommended" helpText="Relative to similar cases in your practice">
+          <FormField
+            label="Case Complexity"
+            hint="recommended"
+            helpText="Relative to similar cases in your practice"
+          >
             <div className="grid grid-cols-3 gap-2">
               {CASE_COMPLEXITY_DESCRIPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => setCaseComplexity(caseComplexity === opt.value ? '' : opt.value)}
+                  onClick={() =>
+                    setCaseComplexity(
+                      caseComplexity === opt.value ? "" : opt.value
+                    )
+                  }
                   className={`
                     py-3 px-2 rounded-lg border text-sm font-medium
                     transition-all duration-150
-                    ${caseComplexity === opt.value
-                      ? 'bg-blue-50 border-blue-500 text-blue-700'
-                      : 'bg-white border-gray-300 text-gray-700 active:bg-gray-50'
+                    ${
+                      caseComplexity === opt.value
+                        ? "bg-blue-50 border-blue-500 text-blue-700"
+                        : "bg-white border-gray-300 text-gray-700 active:bg-gray-50"
                     }
                   `}
                 >
@@ -270,7 +287,7 @@ export function AssessmentForm() {
                   resize-none
                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
                 "
-                style={{ minHeight: '80px' }}
+                style={{ minHeight: "80px" }}
               />
               {/* Voice input button */}
               <div className="absolute right-2 bottom-2">
@@ -278,7 +295,7 @@ export function AssessmentForm() {
                   onTranscript={(text) => {
                     setNarrativeFeedback((prev) =>
                       prev ? `${prev} ${text}` : text
-                    )
+                    );
                   }}
                   disabled={isSubmitting}
                 />
@@ -299,7 +316,9 @@ export function AssessmentForm() {
             >
               <span className="flex items-center gap-2">
                 <svg
-                  className={`w-4 h-4 transition-transform ${optionalExpanded ? 'rotate-90' : ''}`}
+                  className={`w-4 h-4 transition-transform ${
+                    optionalExpanded ? "rotate-90" : ""
+                  }`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -338,7 +357,9 @@ export function AssessmentForm() {
                   <Select
                     id="case-urgency"
                     value={caseUrgency}
-                    onChange={(e) => setCaseUrgency(e.target.value as CaseUrgency | '')}
+                    onChange={(e) =>
+                      setCaseUrgency(e.target.value as CaseUrgency | "")
+                    }
                     placeholder="Select urgency"
                     options={CASE_URGENCY_OPTIONS}
                   />
@@ -349,7 +370,9 @@ export function AssessmentForm() {
                   <Select
                     id="location-type"
                     value={locationType}
-                    onChange={(e) => setLocationType(e.target.value as LocationType | '')}
+                    onChange={(e) =>
+                      setLocationType(e.target.value as LocationType | "")
+                    }
                     placeholder="Select location"
                     options={LOCATION_TYPE_OPTIONS}
                   />
@@ -360,17 +383,19 @@ export function AssessmentForm() {
         </div>
 
         {/* Fixed submit button at bottom */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 safe-area-bottom">
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            fullWidth
-            loading={isSubmitting}
-            disabled={!isFormValid}
-          >
-            {isSubmitting ? 'Submitting...' : 'Submit Assessment'}
-          </Button>
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-area-bottom">
+          <div className="max-w-lg mx-auto p-4">
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              fullWidth
+              loading={isSubmitting}
+              disabled={!isFormValid}
+            >
+              {isSubmitting ? "Submitting..." : "Submit Assessment"}
+            </Button>
+          </div>
         </div>
       </form>
 
@@ -382,5 +407,5 @@ export function AssessmentForm() {
         onClose={hideToast}
       />
     </>
-  )
+  );
 }
